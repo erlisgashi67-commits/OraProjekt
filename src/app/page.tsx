@@ -15,7 +15,6 @@ import { EmployeeMyHours } from '@/components/views/employee-my-hours'
 import { EmployeeMyProjects } from '@/components/views/employee-my-projects'
 import { SettingsView } from '@/components/views/settings-view'
 import { LogTimeDialog } from '@/components/log-time-dialog'
-import { Clock } from 'lucide-react'
 import { toast } from 'sonner'
 
 const queryClient = new QueryClient({
@@ -72,9 +71,11 @@ function Boot() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="size-12 rounded-xl bg-primary flex items-center justify-center animate-pulse">
-            <Clock className="size-6 text-primary-foreground" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="OraProjekt"
+            className="size-14 rounded-xl object-cover animate-pulse shadow-md"
+          />
           <div className="text-sm text-muted-foreground">Duke ngarkuar OraProjekt...</div>
         </div>
       </div>

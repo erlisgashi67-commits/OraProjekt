@@ -143,7 +143,7 @@ export function SettingsView() {
             <InfoRow icon={Building2} label="Multi-tenant" value="Nivel aplikacioni" />
             <InfoRow icon={Globe} label="API" value="REST · Next.js Route Handlers" />
             <InfoRow icon={Smartphone} label="Mobile" value="iOS & Android (PWA installable)" />
-            <InfoRow icon={Shield} label="Auth" value="Cookie-bazuar session" />
+            <InfoRow icon={Shield} label="Auth" value="Token + Cookie session" />
           </div>
         </CardContent>
       </Card>

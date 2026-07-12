@@ -85,9 +85,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Logo */}
       <div className="px-4 py-5 border-b">
         <div className="flex items-center gap-2.5">
-          <div className="size-9 rounded-xl bg-primary flex items-center justify-center">
-            <Clock className="size-5 text-primary-foreground" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="OraProjekt"
+            className="size-9 rounded-lg object-cover shadow-sm"
+          />
           <div>
             <div className="font-bold leading-tight">OraProjekt</div>
             <div className="text-[10px] text-muted-foreground leading-tight">v1.0 · Demo</div>
@@ -183,9 +185,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="size-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <div className="size-7 rounded-lg bg-primary flex items-center justify-center">
-              <Clock className="size-4 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="OraProjekt"
+              className="size-7 rounded-lg object-cover"
+            />
             <span className="font-bold">OraProjekt</span>
           </div>
           <Button

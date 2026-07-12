@@ -29,7 +29,14 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "OraProjekt" }],
   icons: {
-    icon: "/logo.svg",
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -42,6 +49,13 @@ export const metadata: Metadata = {
     description: "Menaxhim i Orëve të Punëtorëve nëpër Projekte",
     siteName: "OraProjekt",
     type: "website",
+    images: [{ url: "/logo.png", width: 1254, height: 1254, alt: "OraProjekt" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "OraProjekt",
+    description: "Menaxhim i Orëve të Punëtorëve nëpër Projekte",
+    images: ["/logo.png"],
   },
 };
 

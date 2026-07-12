@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Clock, LogIn, Sparkles, Smartphone, Building2, BarChart3 } from 'lucide-react'
+import { LogIn, Sparkles, Smartphone, Building2, BarChart3 } from 'lucide-react'
 import { api, clearToken } from '@/lib/api'
 import { useApp } from '@/store/app'
 import { toast } from 'sonner'
@@ -50,9 +50,11 @@ export function LoginScreen() {
           backgroundSize: '40px 40px',
         }} />
         <div className="relative z-10 flex items-center gap-3">
-          <div className="size-11 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center">
-            <Clock className="size-6" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="OraProjekt Logo"
+            className="size-12 rounded-xl object-cover bg-white/95 p-1.5 shadow-lg"
+          />
           <div>
             <div className="text-xl font-bold">OraProjekt</div>
             <div className="text-xs text-white/80">Menaxhim Orësh & Projektesh</div>
