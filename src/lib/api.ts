@@ -12,11 +12,23 @@ import type {
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
+    // Always include credentials (cookies) for same-origin requests
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers || {}),
     },
   })
+  // Handle 401 — session expired or invalid
+  if (res.status === 401) {
+    // Dispatch a global event that the app shell listens to
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('op:unauthorized'))
+    }
+    const data = await res.json().catch(() => ({}))
+    const msg = (data as any)?.error || 'Sesioni ka skaduar. Ju lutemi hyni përsëri.'
+    throw new Error(msg)
+  }
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const msg = (data as any)?.error || `HTTP ${res.status}`

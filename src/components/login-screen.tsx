@@ -29,6 +29,8 @@ export function LoginScreen() {
     const pw = acc?.password ?? password
     setLoading(true)
     try {
+      // First clear any stale session
+      try { await api.auth.logout() } catch {}
       const u = await api.auth.login(em, pw)
       setUser(u)
       toast.success(`Mirë se erdhe, ${u.name}!`)

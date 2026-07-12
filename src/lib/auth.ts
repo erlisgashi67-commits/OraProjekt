@@ -35,11 +35,18 @@ export async function createSession(user: SessionUser): Promise<void> {
   const payload = Buffer.from(JSON.stringify(user)).toString('base64')
   const token = sign(payload)
   const store = await cookies()
+  // Determine if we're in a secure (HTTPS) context — preview uses HTTPS
+  const isSecure = process.env.NODE_ENV === 'production' ||
+    (typeof (globalThis as any).location === 'undefined' && process.env.PREVIEW_MODE === '1')
+
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
+    // 'lax' works for same-origin top-level navigation; 'none' would require secure
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 7, // 7 days
+    // Only set secure in production HTTPS contexts (preview is HTTPS)
+    ...(isSecure ? { secure: true } : {}),
   })
 }
 
@@ -55,7 +62,24 @@ export async function getSession(): Promise<SessionUser | null> {
   const payload = verify(token)
   if (!payload) return null
   try {
-    return JSON.parse(Buffer.from(payload, 'base64').toString()) as SessionUser
+    const session = JSON.parse(Buffer.from(payload, 'base64').toString()) as SessionUser
+    // Validate session against DB — user must still exist
+    // This catches stale sessions from before a DB reseed
+    const dbUser = await db.user.findUnique({
+      where: { id: session.id },
+      select: { id: true, role: true, tenantId: true },
+    })
+    if (!dbUser) {
+      // User no longer exists — destroy the stale session
+      store.delete(SESSION_COOKIE)
+      return null
+    }
+    // Return fresh data from DB in case role/tenant changed
+    return {
+      ...session,
+      role: dbUser.role as 'MANAGER' | 'EMPLOYEE',
+      tenantId: dbUser.tenantId,
+    }
   } catch {
     return null
   }

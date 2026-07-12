@@ -16,6 +16,7 @@ import { EmployeeMyProjects } from '@/components/views/employee-my-projects'
 import { SettingsView } from '@/components/views/settings-view'
 import { LogTimeDialog } from '@/components/log-time-dialog'
 import { Clock } from 'lucide-react'
+import { toast } from 'sonner'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +45,39 @@ function Boot() {
       .finally(() => { if (!cancelled) setBooted(true) })
     return () => { cancelled = true }
   }, [setUser])
+
+  // Listen for 401 events from the API client — auto-logout
+  useEffect(() => {
+    const handler = async () => {
+      setUser(null)
+      queryClient.clear()
+      try { await api.auth.logout() } catch {}
+      toast.error('Sesioni ka skaduar ose nuk është i vlefshëm. Ju lutemi hyni përsëri.')
+    }
+    window.addEventListener('op:unauthorized', handler)
+    return () => window.removeEventListener('op:unauthorized', handler)
+  }, [setUser])
+
+  // Periodic session validation — every 2 minutes, check if session is still valid
+  useEffect(() => {
+    if (!user) return
+    const interval = setInterval(async () => {
+      try {
+        const u = await api.auth.me()
+        if (!u) {
+          setUser(null)
+          queryClient.clear()
+          toast.error('Sesioni ka skaduar. Ju lutemi hyni përsëri.')
+        } else if (u.id !== user.id) {
+          // User changed — refresh state
+          setUser(u)
+        }
+      } catch {
+        // Network error — don't log out, might be transient
+      }
+    }, 2 * 60 * 1000) // 2 minutes
+    return () => clearInterval(interval)
+  }, [user, setUser])
 
   if (!booted) {
     return (
@@ -78,7 +112,6 @@ function Boot() {
         case 'my-hours': return <EmployeeMyHours />
         case 'my-projects': return <EmployeeMyProjects />
         case 'settings': return <SettingsView />
-        // Fallback — if employee somehow ends up on manager views, send them to my-hours
         case 'dashboard':
         case 'projects':
         case 'employees':
