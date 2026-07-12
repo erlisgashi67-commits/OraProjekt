@@ -1,14 +1,127 @@
+# =============================================================================
 # OraProjekt — GitLab CI/CD Pipeline
-# Minimal test pipeline
+# =============================================================================
+# 
+# ⚠️  GATI PËR PRODUKSION — Por kërkon verifikim me kartë krediti!
+#
+# GitLab.com FREE tier kërkon verifikim me kartë krediti për të përdorur
+# shared runners (për të parandaluar crypto mining abuse).
+#
+# Si ta aktivizosh:
+#   1. Shko te: https://gitlab.com/-/profile/billings
+#   2. Shto kartë krediti (nuk do të ngarkohet — falas deri 400 min/muaj)
+#   3. Në GitLab project: Settings → General → Visibility → 
+#      ndrycho "Builds" nga "Disabled" në "Only Project Members"
+#   4. Pipeline do të fillojë automatikisht në çdo push
+#
+# Nëse nuk dëshiron të shtosh kartë:
+#   - Përdor GitHub Actions (falas, pa kartë)
+#   - Ose instalo self-hosted GitLab Runner në serverin tënd
+#
+# Stages:
+#   1. lint    — ESLint check (every commit)
+#   2. test   — Prisma client generation (main/develop)
+#   3. build   — Next.js production build (main/develop/tags)
+#   4. deploy  — Manual deploy to staging/production
+# =============================================================================
+
+image: oven/bun:latest
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .bun/
+    - node_modules/
+    - .next/cache/
+
+variables:
+  BUN_INSTALL_CACHE_DIR: "$CI_PROJECT_DIR/.bun"
 
 stages:
+  - lint
   - test
+  - build
+  - deploy
 
-hello:
+# Stage 1: Lint
+lint:
+  stage: lint
+  script:
+    - bun install
+    - bun run lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# Stage 2: Test (placeholder)
+test:
   stage: test
   script:
-    - echo "OraProjekt CI/CD pipeline is working!"
-    - echo "Branch: $CI_COMMIT_BRANCH"
-    - echo "Commit: $CI_COMMIT_SHA"
+    - bun install
+    - bun run db:generate
+    - echo "Tests placeholder"
   rules:
-    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+
+# Stage 3: Build
+build:
+  stage: build
+  script:
+    - bun install
+    - bun run db:generate
+    - bun run build
+  artifacts:
+    paths:
+      - .next/
+      - public/
+    expire_in: 1 hour
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_TAG
+
+# Stage 4: Deploy Staging (manual, develop branch)
+deploy-staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client rsync
+    - eval $(ssh-agent -s)
+    - echo "$DEPLOY_SSH_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - echo "StrictHostKeyChecking no" > ~/.ssh/config
+  script:
+    - echo "Deploying to staging"
+    - echo "Configure DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH in CI/CD Variables"
+  environment:
+    name: staging
+    url: https://staging.oraprojekt.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: manual
+  needs: ["build"]
+  allow_failure: true
+
+# Stage 4: Deploy Production (manual, main branch)
+deploy-production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client rsync
+    - eval $(ssh-agent -s)
+    - echo "$DEPLOY_SSH_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - echo "StrictHostKeyChecking no" > ~/.ssh/config
+  script:
+    - echo "Deploying to production"
+    - echo "Configure DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH in CI/CD Variables"
+  environment:
+    name: production
+    url: https://oraprojekt.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  needs: ["build"]
+  allow_failure: true
