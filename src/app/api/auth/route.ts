@@ -37,9 +37,9 @@ export async function POST(req: NextRequest) {
       ...sessionUser,
       token,
     })
-  } catch (e: any) {
+  } catch (e) {
     console.error('Login error', e)
-    return NextResponse.json({ error: 'Gabim i brendshëm i serverit', debug: e.message, stack: e.stack?.slice(0, 300) }, { status: 500 })
+    return NextResponse.json({ error: 'Gabim i brendshëm i serverit' }, { status: 500 })
   }
 }
 

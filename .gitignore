@@ -68,3 +68,4 @@ android/keystore.properties
 
 # Capacitor
 out/
+.vercel
