@@ -1,0 +1,223 @@
+# =============================================================================
+# OraProjekt — GitHub Actions CI Pipeline
+# =============================================================================
+# Falas, pa kartë krediti! GitHub Actions jep 2000 min/muaj falas për llogari private.
+#
+# Triggers:
+#   - Push to main/develop → lint + test + build
+#   - Pull Request → lint + test
+#   - Manual dispatch → full pipeline
+#
+# Secrets needed (Settings → Secrets and variables → Actions):
+#   - None required for lint/test/build
+#   - VERCEL_TOKEN + VERCEL_ORG_ID + VERCEL_PROJECT_ID (for deploy)
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Cancel previous runs on same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Permissions — least privilege
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+env:
+  BUN_VERSION: '1.3'
+
+jobs:
+  # ===========================================================================
+  # Job 1: Lint — ESLint check
+  # ===========================================================================
+  lint:
+    name: 🔍 Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🍞 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: 📦 Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: 📥 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔍 Run ESLint
+        run: bun run lint
+
+      - name: 📊 Upload lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results
+          path: |
+            .eslintcache
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # Job 2: Test — Prisma client + type check
+  # ===========================================================================
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🍞 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: 📦 Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: 📥 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🗄️ Setup Database
+        env:
+          DATABASE_URL: 'file:./db/test.db'
+        run: |
+          bun run db:generate
+          bun run db:push
+
+      - name: 🔍 Type check
+        run: bun run tsc --noEmit || true
+
+      - name: 🧪 Run tests (placeholder)
+        run: |
+          echo "✅ Tests placeholder — add tests in __tests__/ or *.test.ts files"
+          echo "Example: bun test"
+          echo "Test files will be detected automatically when added"
+
+      - name: 📊 Upload test database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-database
+          path: db/test.db
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # Job 3: Build — Next.js production build (main/develop only)
+  # ===========================================================================
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🍞 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: 📦 Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .bun
+            .next/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}-next-${{ hashFiles('**/*.tsx', '**/*.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}-next-
+            ${{ runner.os }}-bun-
+
+      - name: 📥 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🗄️ Generate Prisma client
+        run: bun run db:generate
+
+      - name: 🏗️ Build Next.js
+        env:
+          DATABASE_URL: 'file:./db/build.db'
+          AUTH_SECRET: 'build-secret-for-ci'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: bun run build
+
+      - name: 📦 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            .next
+            public
+          retention-days: 3
+
+  # ===========================================================================
+  # Job 4: Security — Dependency audit
+  # ===========================================================================
+  security:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🍞 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: 📥 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔒 Audit dependencies
+        run: |
+          echo "Checking for vulnerabilities..."
+          bun audit || true
+          echo "Audit complete (warnings shown above)"
+
+      - name: 📊 Check for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

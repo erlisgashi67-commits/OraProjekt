@@ -1,0 +1,28 @@
+# CODEOWNERS — automatic code review requests
+# https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner — all files
+*                           @erlisgashi67-commits
+
+# Source code
+/src/                       @erlisgashi67-commits
+/prisma/                    @erlisgashi67-commits
+
+# CI/CD
+/.github/                   @erlisgashi67-commits
+/.gitlab-ci.yml             @erlisgashi67-commits
+/Dockerfile                 @erlisgashi67-commits
+/docker-compose.yml         @erlisgashi67-commits
+
+# Documentation
+/docs/                      @erlisgashi67-commits
+/README.md                  @erlisgashi67-commits
+
+# Mobile
+/ios/                       @erlisgashi67-commits
+/android/                   @erlisgashi67-commits
+/capacitor.config.ts        @erlisgashi67-commits
+
+# Config
+/package.json               @erlisgashi67-commits
+/.env.example               @erlisgashi67-commits
