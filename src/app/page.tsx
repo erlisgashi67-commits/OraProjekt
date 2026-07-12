@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { api, clearToken } from '@/lib/api'
 import { useApp } from '@/store/app'
 import { LoginScreen } from '@/components/login-screen'
 import { AppShell } from '@/components/app-shell'
@@ -36,48 +36,37 @@ function Boot() {
   const logDialogProjectId = useApp(s => s.logDialogProjectId)
   const [booted, setBooted] = useState(false)
 
-  // Restore session on mount
+  // Restore session on mount — only if we have a token in localStorage
   useEffect(() => {
     let cancelled = false
+    const token = typeof window !== 'undefined' ? localStorage.getItem('op_token') : null
+    if (!token) {
+      // No token — skip API call, go straight to login
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBooted(true)
+      return
+    }
     api.auth.me()
       .then(u => { if (!cancelled) setUser(u) })
-      .catch(() => {})
+      .catch(() => {
+        // Token might be stale — clean up
+        if (typeof window !== 'undefined') clearToken()
+      })
       .finally(() => { if (!cancelled) setBooted(true) })
     return () => { cancelled = true }
   }, [setUser])
 
   // Listen for 401 events from the API client — auto-logout
   useEffect(() => {
-    const handler = async () => {
+    const handler = () => {
       setUser(null)
       queryClient.clear()
-      try { await api.auth.logout() } catch {}
-      toast.error('Sesioni ka skaduar ose nuk është i vlefshëm. Ju lutemi hyni përsëri.')
+      clearToken()
+      toast.error('Sesioni ka skaduar. Ju lutemi hyni përsëri.')
     }
     window.addEventListener('op:unauthorized', handler)
     return () => window.removeEventListener('op:unauthorized', handler)
   }, [setUser])
-
-  // Periodic session validation — every 2 minutes, check if session is still valid
-  useEffect(() => {
-    if (!user) return
-    const interval = setInterval(async () => {
-      try {
-        const u = await api.auth.me()
-        if (!u) {
-          setUser(null)
-          queryClient.clear()
-          toast.error('Sesioni ka skaduar. Ju lutemi hyni përsëri.')
-        } else if (u.id !== user.id) {
-          // User changed — refresh state
-          setUser(u)
-        }
-      } catch {
-        // Network error — don't log out, might be transient
-      }
-    }, 2 * 60 * 1000) // 2 minutes
-    return () => clearInterval(interval)
-  }, [user, setUser])
 
   if (!booted) {
     return (

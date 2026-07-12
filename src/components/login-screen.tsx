@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Clock, LogIn, Sparkles, Smartphone, Building2, BarChart3 } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, clearToken } from '@/lib/api'
 import { useApp } from '@/store/app'
 import { toast } from 'sonner'
 
@@ -29,8 +29,8 @@ export function LoginScreen() {
     const pw = acc?.password ?? password
     setLoading(true)
     try {
-      // First clear any stale session
-      try { await api.auth.logout() } catch {}
+      // Clear any stale token first
+      clearToken()
       const u = await api.auth.login(em, pw)
       setUser(u)
       toast.success(`Mirë se erdhe, ${u.name}!`)

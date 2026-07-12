@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createSession, destroySession, getSession } from '@/lib/auth'
+import type { SessionUser } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Kredenciale të gabuara' }, { status: 401 })
     }
 
-    await createSession({
+    const sessionUser: SessionUser = {
       id: user.id,
       email: user.email,
       name: user.name,
@@ -26,16 +27,15 @@ export async function POST(req: NextRequest) {
       tenantId: user.tenantId,
       tenantName: user.tenant.name,
       employeeId: user.employee?.id ?? null,
-    })
+    }
+
+    // createSession returns the token — we send it to the client
+    // so it can be stored in localStorage and sent via Authorization header
+    const token = await createSession(sessionUser)
 
     return NextResponse.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      tenantId: user.tenantId,
-      tenantName: user.tenant.name,
-      employeeId: user.employee?.id ?? null,
+      ...sessionUser,
+      token,
     })
   } catch (e) {
     console.error('Login error', e)

@@ -1,5 +1,7 @@
-// Simple session management using signed cookies (no JWT lib needed)
-import { cookies } from 'next/headers'
+// Session management using signed tokens.
+// Token is sent via Authorization header (primary) and cookie (fallback).
+// This dual approach ensures auth works in both top-level and iframe/preview contexts.
+import { cookies, headers } from 'next/headers'
 import { db } from './db'
 import crypto from 'crypto'
 
@@ -13,6 +15,7 @@ function sign(payload: string): string {
 }
 
 function verify(token: string): string | null {
+  if (!token) return null
   const parts = token.split('.')
   if (parts.length !== 2) return null
   const [payload, sig] = parts
@@ -31,23 +34,19 @@ export type SessionUser = {
   employeeId: string | null
 }
 
-export async function createSession(user: SessionUser): Promise<void> {
+// Create session — returns the token so the API route can send it in the response body.
+// Also sets the cookie as a fallback for same-origin navigation.
+export async function createSession(user: SessionUser): Promise<string> {
   const payload = Buffer.from(JSON.stringify(user)).toString('base64')
   const token = sign(payload)
   const store = await cookies()
-  // Determine if we're in a secure (HTTPS) context — preview uses HTTPS
-  const isSecure = process.env.NODE_ENV === 'production' ||
-    (typeof (globalThis as any).location === 'undefined' && process.env.PREVIEW_MODE === '1')
-
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    // 'lax' works for same-origin top-level navigation; 'none' would require secure
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 7, // 7 days
-    // Only set secure in production HTTPS contexts (preview is HTTPS)
-    ...(isSecure ? { secure: true } : {}),
   })
+  return token
 }
 
 export async function destroySession(): Promise<void> {
@@ -55,46 +54,32 @@ export async function destroySession(): Promise<void> {
   store.delete(SESSION_COOKIE)
 }
 
+// Get session from Authorization header (primary) or cookie (fallback)
 export async function getSession(): Promise<SessionUser | null> {
-  const store = await cookies()
-  const token = store.get(SESSION_COOKIE)?.value
+  let token: string | undefined
+
+  // Try Authorization header first (works in all contexts including iframes)
+  const hdrs = await headers()
+  const authHeader = hdrs.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7)
+  }
+
+  // Fall back to cookie
+  if (!token) {
+    const store = await cookies()
+    token = store.get(SESSION_COOKIE)?.value
+  }
+
   if (!token) return null
   const payload = verify(token)
   if (!payload) return null
+
   try {
-    const session = JSON.parse(Buffer.from(payload, 'base64').toString()) as SessionUser
-    // Validate session against DB — user must still exist
-    // This catches stale sessions from before a DB reseed
-    const dbUser = await db.user.findUnique({
-      where: { id: session.id },
-      select: { id: true, role: true, tenantId: true },
-    })
-    if (!dbUser) {
-      // User no longer exists — destroy the stale session
-      store.delete(SESSION_COOKIE)
-      return null
-    }
-    // Return fresh data from DB in case role/tenant changed
-    return {
-      ...session,
-      role: dbUser.role as 'MANAGER' | 'EMPLOYEE',
-      tenantId: dbUser.tenantId,
-    }
+    return JSON.parse(Buffer.from(payload, 'base64').toString()) as SessionUser
   } catch {
     return null
   }
-}
-
-export async function getCurrentUserWithEmployee(): Promise<{
-  user: SessionUser
-  employee: Awaited<ReturnType<typeof db.employee.findUnique>>
-} | null> {
-  const session = await getSession()
-  if (!session) return null
-  const employee = session.employeeId
-    ? await db.employee.findUnique({ where: { id: session.employeeId } })
-    : null
-  return { user: session, employee }
 }
 
 // Helper for API routes — returns 401 if not authenticated

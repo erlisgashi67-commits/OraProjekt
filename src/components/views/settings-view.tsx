@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useTheme } from 'next-themes'
 import { Building2, User, Shield, Palette, Smartphone, Globe, LogOut, Sun, Moon, Monitor } from 'lucide-react'
-import { api } from '@/lib/api'
+import { api, clearToken } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -22,10 +22,11 @@ export function SettingsView() {
   const logout = async () => {
     try {
       await api.auth.logout()
-      qc.clear()
-      setUser(null)
-      toast.success('Dole nga llogaria')
     } catch {}
+    clearToken()
+    qc.clear()
+    setUser(null)
+    toast.success('Dole nga llogaria')
   }
 
   return (

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useApp, type View } from '@/store/app'
-import { api } from '@/lib/api'
+import { api, clearToken } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -58,10 +58,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await api.auth.logout()
-      qc.clear()
-      setUser(null)
-      toast.success('Dole nga llogaria')
     } catch {}
+    clearToken()
+    qc.clear()
+    setUser(null)
+    toast.success('Dole nga llogaria')
   }
 
   const initials = user.name

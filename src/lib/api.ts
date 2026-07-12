@@ -9,26 +9,53 @@ import type {
   ProjectStatus,
 } from './types'
 
+const TOKEN_KEY = 'op_token'
+
+// Token management — stored in localStorage, sent via Authorization header.
+// This bypasses all cookie/SameSite/iframe restrictions.
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+export function setToken(token: string): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(TOKEN_KEY, token)
+}
+
+export function clearToken(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(TOKEN_KEY)
+}
+
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init?.headers as Record<string, string>) || {}),
+  }
+  // Send token via Authorization header — works in ALL contexts (iframe, cross-origin, etc.)
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const res = await fetch(url, {
     ...init,
-    // Always include credentials (cookies) for same-origin requests
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+    credentials: 'include', // also send cookies as fallback
+    headers,
   })
-  // Handle 401 — session expired or invalid
+
+  // Handle 401 — only trigger auto-logout if we had a token
   if (res.status === 401) {
-    // Dispatch a global event that the app shell listens to
-    if (typeof window !== 'undefined') {
+    if (token && typeof window !== 'undefined') {
+      clearToken()
       window.dispatchEvent(new CustomEvent('op:unauthorized'))
     }
     const data = await res.json().catch(() => ({}))
     const msg = (data as any)?.error || 'Sesioni ka skaduar. Ju lutemi hyni përsëri.'
     throw new Error(msg)
   }
+
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const msg = (data as any)?.error || `HTTP ${res.status}`
@@ -41,11 +68,21 @@ export const api = {
   auth: {
     me: () => jsonFetch<{ user: SessionUser | null }>('/api/auth').then(r => r.user),
     login: (email: string, password: string) =>
-      jsonFetch<SessionUser>('/api/auth', {
+      jsonFetch<SessionUser & { token: string }>('/api/auth', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
+      }).then(res => {
+        // Store token in localStorage for subsequent requests
+        setToken(res.token)
+        // Return user data (strip token)
+        const { token, ...user } = res
+        return user as SessionUser
       }),
-    logout: () => jsonFetch<{ ok: true }>('/api/auth', { method: 'DELETE' }),
+    logout: () =>
+      jsonFetch<{ ok: true }>('/api/auth', { method: 'DELETE' }).then(res => {
+        clearToken()
+        return res
+      }),
   },
   projects: {
     list: () => jsonFetch<{ projects: Project[] }>('/api/projects').then(r => r.projects),
