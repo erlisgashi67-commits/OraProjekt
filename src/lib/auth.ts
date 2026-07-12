@@ -1,14 +1,19 @@
-// Session management using signed tokens.
+// Session management using signed tokens (primary) + NextAuth (OAuth).
 // Token is sent via Authorization header (primary) and cookie (fallback).
+// NextAuth handles Google/Microsoft OAuth sign-ins and also sets a JWT cookie.
+//
+// NOTE: auth.config.ts (NextAuth) is loaded lazily — only when the NextAuth
+// route handler is hit. This avoids loading heavy OAuth providers on every request.
 import { cookies, headers } from 'next/headers'
 import { db } from './db'
 import crypto from 'crypto'
 
 const SESSION_COOKIE = 'op_session'
-const SECRET = process.env.SESSION_SECRET || 'oraprojekt-dev-secret-2026'
+const NEXTAUTH_COOKIE = 'next-auth.session-token'
+const NEXTAUTH_COOKIE_SECURE = '__Secure-next-auth.session-token'
+const SECRET = process.env.AUTH_SECRET || process.env.SESSION_SECRET || 'oraprojekt-dev-secret-2026'
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-// Token payload now includes `iat` (issued-at) for expiry enforcement
 type TokenPayload = {
   id: string
   email: string
@@ -26,7 +31,7 @@ function sign(payload: string): string {
   return `${payload}.${sig}`
 }
 
-// Timing-safe verification to prevent timing attacks
+// Timing-safe verification
 function verify(token: string): string | null {
   if (!token) return null
   const parts = token.split('.')
@@ -34,7 +39,6 @@ function verify(token: string): string | null {
   const [payload, sig] = parts
   const expectedSig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex')
 
-  // Constant-time comparison
   try {
     const sigBuf = Buffer.from(sig)
     const expectedBuf = Buffer.from(expectedSig)
@@ -55,10 +59,10 @@ export type SessionUser = {
   tenantId: string
   tenantName: string
   employeeId: string | null
+  image?: string | null
 }
 
 // Create session — returns the token so the API route can send it in the response body.
-// Also sets the cookie as a fallback for same-origin navigation.
 export async function createSession(user: SessionUser): Promise<string> {
   const payload: TokenPayload = {
     ...user,
@@ -71,7 +75,7 @@ export async function createSession(user: SessionUser): Promise<string> {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 7,
   })
   return token
 }
@@ -81,71 +85,78 @@ export async function destroySession(): Promise<void> {
   store.delete(SESSION_COOKIE)
 }
 
-// Get session from Authorization header (primary) or cookie (fallback).
-// Validates: signature, expiry, and that the user still exists in the DB.
+// Get session from multiple sources (in priority order):
+// 1. Authorization header (Bearer token) — primary for API calls
+// 2. op_session cookie — our custom JWT
+// 3. NextAuth session — for OAuth sign-ins (Google/Microsoft)
 export async function getSession(): Promise<SessionUser | null> {
   let token: string | undefined
 
-  // Try Authorization header first (works in all contexts including iframes)
+  // 1. Try Authorization header
   const hdrs = await headers()
   const authHeader = hdrs.get('authorization')
   if (authHeader?.startsWith('Bearer ')) {
     token = authHeader.slice(7)
   }
 
-  // Fall back to cookie
+  // 2. Fall back to our custom cookie
   if (!token) {
     const store = await cookies()
     token = store.get(SESSION_COOKIE)?.value
   }
 
-  if (!token) return null
-  const payloadStr = verify(token)
-  if (!payloadStr) return null
+  // 3. Try our custom token first
+  if (token) {
+    const payloadStr = verify(token)
+    if (payloadStr) {
+      try {
+        const payload = JSON.parse(Buffer.from(payloadStr, 'base64').toString()) as TokenPayload
 
-  try {
-    const payload = JSON.parse(Buffer.from(payloadStr, 'base64').toString()) as TokenPayload
+        // Check session expiry
+        if (!payload.iat || Date.now() - payload.iat > SESSION_TTL_MS) {
+          const store = await cookies()
+          store.delete(SESSION_COOKIE)
+          return null
+        }
 
-    // Check session expiry
-    if (!payload.iat || Date.now() - payload.iat > SESSION_TTL_MS) {
-      // Session expired — destroy it
-      const store = await cookies()
-      store.delete(SESSION_COOKIE)
-      return null
+        // Validate user still exists in DB
+        const dbUser = await db.user.findUnique({
+          where: { id: payload.id },
+          select: {
+            id: true, role: true, tenantId: true, email: true, name: true, image: true,
+            tenant: { select: { name: true } },
+            employee: { select: { id: true } },
+          },
+        })
+        if (!dbUser) {
+          const store = await cookies()
+          store.delete(SESSION_COOKIE)
+          return null
+        }
+
+        return {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          role: dbUser.role as 'MANAGER' | 'EMPLOYEE',
+          tenantId: dbUser.tenantId,
+          tenantName: dbUser.tenant.name,
+          employeeId: dbUser.employee?.id ?? null,
+          image: dbUser.image,
+        }
+      } catch {
+        return null
+      }
     }
-
-    // Validate the user still exists in the DB (catches stale sessions after user deletion)
-    const dbUser = await db.user.findUnique({
-      where: { id: payload.id },
-      select: {
-        id: true,
-        role: true,
-        tenantId: true,
-        email: true,
-        name: true,
-        tenant: { select: { name: true } },
-        employee: { select: { id: true } },
-      },
-    })
-    if (!dbUser) {
-      const store = await cookies()
-      store.delete(SESSION_COOKIE)
-      return null
-    }
-
-    // Return fresh data from DB in case role/tenant changed
-    return {
-      id: dbUser.id,
-      email: dbUser.email,
-      name: dbUser.name,
-      role: dbUser.role as 'MANAGER' | 'EMPLOYEE',
-      tenantId: dbUser.tenantId,
-      tenantName: dbUser.tenant.name,
-      employeeId: dbUser.employee?.id ?? null,
-    }
-  } catch {
-    return null
   }
+
+  // 4. NextAuth session check is intentionally omitted here to avoid loading
+  // the heavy NextAuth module on every request. NextAuth sessions are checked
+  // only when the user visits /api/auth/* endpoints. For API routes that need
+  // to accept NextAuth sessions, they can call auth() from auth.config.ts directly.
+  // For now, our custom token-based auth handles all session needs.
+
+  return null
 }
 
 // Helper for API routes — returns 401 if not authenticated
@@ -169,4 +180,21 @@ export async function requireManager(): Promise<SessionUser> {
     })
   }
   return session
+}
+
+// Resolve tenant from email domain — used by public sign-up & invite flows
+export async function resolveTenantFromEmail(email: string): Promise<{ tenantId: string; tenantName: string } | null> {
+  const domain = email.toLowerCase().split('@')[1]
+  if (!domain) return null
+
+  const mapping = await db.tenantDomain.findFirst({
+    where: { domain, status: 'ACTIVE' },
+    include: { tenant: { select: { id: true, name: true } } },
+  })
+
+  if (mapping) {
+    return { tenantId: mapping.tenant.id, tenantName: mapping.tenant.name }
+  }
+
+  return null
 }

@@ -9,26 +9,90 @@ datasource db {
 }
 
 model Tenant {
-  id        String     @id @default(cuid())
+  id        String         @id @default(cuid())
   name      String
-  subdomain String     @unique
-  plan      String     @default("FREE") // FREE | PRO | ENTERPRISE
-  createdAt DateTime   @default(now())
+  subdomain String         @unique
+  plan      String         @default("FREE") // FREE | PRO | ENTERPRISE
+  createdAt DateTime       @default(now())
   users     User[]
   projects  Project[]
   employees Employee[]
+  domains   TenantDomain[] // email-domain → tenant mapping
+}
+
+// Maps an email domain (e.g. "kompania-ks.com") to a tenant.
+// When a user signs in via Google/Microsoft OAuth, the domain part of their email
+// is matched against this table to auto-assign them to the correct tenant.
+// status: PENDING (admin must approve) | ACTIVE | REJECTED
+model TenantDomain {
+  id        String   @id @default(cuid())
+  tenantId  String
+  domain    String   @unique // lowercase, no @ — e.g. "kompania-ks.com"
+  status    String   @default("ACTIVE") // PENDING | ACTIVE | REJECTED
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String // plain-text for demo only
-  name      String
-  role      String   @default("EMPLOYEE") // MANAGER | EMPLOYEE
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  employee  Employee?
-  createdAt DateTime @default(now())
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?   // nullable now — OAuth users have no password
+  name          String
+  role          String    @default("EMPLOYEE") // MANAGER | EMPLOYEE
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id])
+  employee      Employee?
+  // NextAuth OAuth fields
+  image         String?
+  emailVerified DateTime?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+}
+
+// NextAuth Account model — links OAuth providers (Google, Microsoft, etc.)
+// to a single User. A user can have multiple accounts (one per provider).
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String   // "oauth" | "oidc" | "email"
+  provider          String   // "google" | "azure-ad" | "credentials"
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// NextAuth Session model — database-backed sessions (alternative to JWT)
+// We use JWT by default, but this is here for future flexibility.
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// NextAuth VerificationToken model — for email magic links & email verification
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model Employee {

@@ -183,6 +183,21 @@ export const api = {
       return jsonFetch<ReportSummary>(`/api/reports/summary?${q.toString()}`)
     },
   },
+  tenantDomains: {
+    list: () => jsonFetch<{ domains: TenantDomain[] }>('/api/tenant-domains').then(r => r.domains),
+    create: (domain: string) =>
+      jsonFetch<{ domain: TenantDomain }>('/api/tenant-domains', {
+        method: 'POST',
+        body: JSON.stringify({ domain }),
+      }).then(r => r.domain),
+    delete: (id: string) =>
+      jsonFetch<{ ok: true }>(`/api/tenant-domains/${id}`, { method: 'DELETE' }),
+    verify: (id: string, status: 'ACTIVE' | 'REJECTED') =>
+      jsonFetch<{ domain: TenantDomain }>(`/api/tenant-domains/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }).then(r => r.domain),
+  },
 }
 
 // Helper formatters

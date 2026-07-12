@@ -1,23 +1,55 @@
-:81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
+# =============================================================================
+# OraProjekt — Caddyfile for production
+# Reverse proxy with automatic HTTPS via Let's Encrypt
+# =============================================================================
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+# Replace with your domain
+oraprojekt.com {
+    # Redirect www to non-www
+    redir www.oraprojekt.com{uri} permanent
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+    # Proxy to Next.js app
+    reverse_proxy oraprojekt-app:3000
+
+    # Security headers
+    header {
+        # HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Content type sniffing protection
+        X-Content-Type-Options "nosniff"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Permissions policy
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # Remove server header
+        -Server
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Cache static assets
+    @static {
+        path /_next/static/* /favicon.ico /logo.png /manifest.webmanifest
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    # Logging
+    log {
+        output file /data/access.log
+        format json
+    }
+}
+
+# www redirect
+www.oraprojekt.com {
+    redir https://oraprojekt.com{uri} permanent
+}
+
+# Staging environment
+staging.oraprojekt.com {
+    reverse_proxy oraprojekt-staging:3000
+    encode gzip zstd
 }

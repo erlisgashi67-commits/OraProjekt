@@ -1,0 +1,60 @@
+# OraProjekt — .dockerignore
+# Files/directories to exclude from Docker build context
+
+# Dependencies (will be installed in container)
+node_modules
+.bun
+
+# Build artifacts
+.next
+.next/cache
+dist
+build
+
+# Development files
+.git
+.gitignore
+.gitlab-ci.yml
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment (use docker-compose env vars)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test
+coverage
+.nyc_output
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Misc
+README.md
+docs
+scripts/cleanup-orphans.ts
+scripts/check-db.ts
+scripts/check-users.ts
+scripts/generate-icons.js
+examples
+download

@@ -130,3 +130,21 @@ export const PROJECT_COLORS = [
   '#84cc16', // lime
   '#f97316', // orange
 ]
+
+// Tenant domain mapping — links email domain to tenant for OAuth auto-assignment
+export type TenantDomainStatus = 'PENDING' | 'ACTIVE' | 'REJECTED'
+
+export type TenantDomain = {
+  id: string
+  tenantId: string
+  domain: string
+  status: TenantDomainStatus
+  verifiedAt: string | null
+  createdAt: string
+}
+
+export const TENANT_DOMAIN_STATUS_LABELS: Record<TenantDomainStatus, string> = {
+  PENDING: 'Në pritje',
+  ACTIVE: 'Aktiv',
+  REJECTED: 'Refuzuar',
+}

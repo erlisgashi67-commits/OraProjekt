@@ -1,0 +1,55 @@
+# =============================================================================
+# OraProjekt — Docker Compose
+# Production deployment with reverse proxy
+# =============================================================================
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oraprojekt-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/custom.db
+      - AUTH_SECRET=${AUTH_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+    volumes:
+      - app-data:/app/data
+      - app-uploads:/app/uploads
+    networks:
+      - oraprojekt-net
+
+  # Optional: Caddy reverse proxy for HTTPS
+  proxy:
+    image: caddy:2-alpine
+    container_name: oraprojekt-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    networks:
+      - oraprojekt-net
+
+volumes:
+  app-data:
+  app-uploads:
+  caddy-data:
+  caddy-config:
+
+networks:
+  oraprojekt-net:
+    driver: bridge

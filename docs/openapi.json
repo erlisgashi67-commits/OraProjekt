@@ -1,0 +1,501 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OraProjekt API",
+    "description": "Multi-tenant timesheet management API",
+    "version": "1.0.0",
+    "contact": {
+      "name": "OraProjekt",
+      "url": "https://oraprojekt.com"
+    }
+  },
+  "servers": [
+    { "url": "https://oraprojekt.com/api", "description": "Production" },
+    { "url": "https://staging.oraprojekt.com/api", "description": "Staging" },
+    { "url": "http://localhost:3000/api", "description": "Development" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "op_session"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["MANAGER", "EMPLOYEE"] },
+          "tenantId": { "type": "string" },
+          "tenantName": { "type": "string" },
+          "employeeId": { "type": "string", "nullable": true },
+          "token": { "type": "string", "description": "JWT token (only in login response)" }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["ACTIVE", "ON_HOLD", "COMPLETED"] },
+          "budgetHours": { "type": "number", "nullable": true },
+          "startDate": { "type": "string", "format": "date-time", "nullable": true },
+          "endDate": { "type": "string", "format": "date-time", "nullable": true },
+          "color": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "assignmentsCount": { "type": "number" },
+          "timesheetsCount": { "type": "number" },
+          "loggedHours": { "type": "number" },
+          "team": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "position": { "type": "string", "nullable": true },
+                "role": { "type": "string", "nullable": true }
+              }
+            }
+          }
+        }
+      },
+      "Employee": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "firstName": { "type": "string" },
+          "lastName": { "type": "string" },
+          "fullName": { "type": "string" },
+          "email": { "type": "string", "format": "email" },
+          "phone": { "type": "string", "nullable": true },
+          "position": { "type": "string", "nullable": true },
+          "hourlyRate": { "type": "number" },
+          "role": { "type": "string", "enum": ["MANAGER", "EMPLOYEE"] },
+          "assignmentsCount": { "type": "number" },
+          "timesheetsCount": { "type": "number" },
+          "totalHours": { "type": "number" },
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "color": { "type": "string" },
+                "role": { "type": "string", "nullable": true }
+              }
+            }
+          }
+        }
+      },
+      "Timesheet": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "date": { "type": "string", "format": "date-time" },
+          "hours": { "type": "number" },
+          "description": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"] },
+          "employee": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "position": { "type": "string", "nullable": true },
+              "hourlyRate": { "type": "number" }
+            }
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "color": { "type": "string" }
+            }
+          },
+          "cost": { "type": "number" }
+        }
+      },
+      "TenantDomain": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "domain": { "type": "string" },
+          "status": { "type": "string", "enum": ["PENDING", "ACTIVE", "REJECTED"] },
+          "verifiedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }, { "cookieAuth": [] }],
+  "paths": {
+    "/auth": {
+      "post": {
+        "summary": "Login",
+        "description": "Authenticate with email + password, returns JWT token",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      },
+      "get": {
+        "summary": "Get current session",
+        "responses": {
+          "200": {
+            "description": "Current user or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "type": "null" }] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Logout",
+        "responses": {
+          "200": {
+            "description": "Logged out",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" } } } } }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "summary": "List projects",
+        "responses": {
+          "200": {
+            "description": "List of projects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "projects": { "type": "array", "items": { "$ref": "#/components/schemas/Project" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create project",
+        "description": "Manager only",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "maxLength": 200 },
+                  "description": { "type": "string", "maxLength": 5000 },
+                  "status": { "type": "string", "enum": ["ACTIVE", "ON_HOLD", "COMPLETED"] },
+                  "budgetHours": { "type": "number", "minimum": 0, "nullable": true },
+                  "startDate": { "type": "string", "format": "date" },
+                  "endDate": { "type": "string", "format": "date" },
+                  "color": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Project created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Project" } } }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Not a manager", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "put": {
+        "summary": "Update project",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "status": { "type": "string", "enum": ["ACTIVE", "ON_HOLD", "COMPLETED"] },
+                  "budgetHours": { "type": "number", "nullable": true },
+                  "startDate": { "type": "string", "format": "date", "nullable": true },
+                  "endDate": { "type": "string", "format": "date", "nullable": true },
+                  "color": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Project" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Delete project (cascade)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Deleted", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" } } } } } }
+        }
+      }
+    },
+    "/employees": {
+      "get": {
+        "summary": "List employees",
+        "responses": {
+          "200": {
+            "description": "List of employees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "employees": { "type": "array", "items": { "$ref": "#/components/schemas/Employee" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create employee + user account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["firstName", "lastName", "email"],
+                "properties": {
+                  "firstName": { "type": "string", "maxLength": 100 },
+                  "lastName": { "type": "string", "maxLength": 100 },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "position": { "type": "string" },
+                  "hourlyRate": { "type": "number", "minimum": 0 },
+                  "password": { "type": "string", "minLength": 4 },
+                  "role": { "type": "string", "enum": ["MANAGER", "EMPLOYEE"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Employee" } } } },
+          "409": { "description": "Email exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/timesheets": {
+      "get": {
+        "summary": "List timesheets",
+        "parameters": [
+          { "name": "projectId", "in": "query", "schema": { "type": "string" } },
+          { "name": "employeeId", "in": "query", "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"] } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 200, "maximum": 1000 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of timesheets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timesheets": { "type": "array", "items": { "$ref": "#/components/schemas/Timesheet" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create timesheet",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["projectId", "date", "hours"],
+                "properties": {
+                  "projectId": { "type": "string" },
+                  "employeeId": { "type": "string", "description": "Manager only; employees auto-assigned" },
+                  "date": { "type": "string", "format": "date" },
+                  "hours": { "type": "number", "minimum": 0.25, "maximum": 24 },
+                  "description": { "type": "string" },
+                  "status": { "type": "string", "enum": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Timesheet" } } } }
+        }
+      }
+    },
+    "/timesheets/{id}/status": {
+      "patch": {
+        "summary": "Change timesheet status (manager only)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "type": "string", "enum": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Status updated" },
+          "403": { "description": "Not a manager" }
+        }
+      }
+    },
+    "/reports/summary": {
+      "get": {
+        "summary": "Get report summary",
+        "parameters": [
+          { "name": "from", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "to", "in": "query", "schema": { "type": "string", "format": "date" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "totalHours": { "type": "number" },
+                        "totalEntries": { "type": "number" },
+                        "activeProjects": { "type": "number" },
+                        "totalEmployees": { "type": "number" },
+                        "pendingApprovals": { "type": "number" }
+                      }
+                    },
+                    "byStatus": { "type": "object" },
+                    "byProject": { "type": "array" },
+                    "byEmployee": { "type": "array" },
+                    "byDate": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenant-domains": {
+      "get": {
+        "summary": "List tenant domains (manager only)",
+        "responses": {
+          "200": {
+            "description": "List of domains",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "domains": { "type": "array", "items": { "$ref": "#/components/schemas/TenantDomain" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add tenant domain",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["domain"],
+                "properties": {
+                  "domain": { "type": "string", "example": "kompania-ks.com" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Domain added (PENDING status)" },
+          "409": { "description": "Domain already claimed" }
+        }
+      }
+    }
+  }
+}
