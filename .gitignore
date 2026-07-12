@@ -47,3 +47,24 @@ download/
 upload/
 .zscripts/dev.log
 tool-results/
+
+# iOS build artifacts
+ios/App/build/
+ios/App/Pods/
+ios/App/App.app
+ios/App/DerivedData/
+ios/capacitor-cordova-ios-plugins/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Android build artifacts
+android/.gradle/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+android/keystore.properties
+*.keystore
+*.jks
+
+# Capacitor
+out/

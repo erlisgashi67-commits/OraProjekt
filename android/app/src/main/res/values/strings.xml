@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">OraProjekt</string>
+    <string name="title_activity_main">OraProjekt</string>
+    <string name="package_name">com.oraprojekt.app</string>
+    <string name="custom_url_scheme">com.oraprojekt.app</string>
+</resources>
