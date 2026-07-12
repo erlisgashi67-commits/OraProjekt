@@ -7,21 +7,20 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useApp } from '@/store/app'
 import { api } from '@/lib/api'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Loader2, FolderKanban } from 'lucide-react'
 import type { Timesheet, TimesheetStatus } from '@/lib/types'
 import { STATUS_LABELS } from '@/lib/types'
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // If editing existing entry
   editing?: Timesheet | null
-  // Pre-selected project (from "Log hours" on project card)
   presetProjectId?: string
-  // Pre-selected date (YYYY-MM-DD)
   presetDate?: string
 }
 
@@ -30,14 +29,14 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
   const qc = useQueryClient()
   const isManager = user.role === 'MANAGER'
 
-  const { data: projects = [] } = useQuery({
+  // Always load projects when dialog opens — needed for the project dropdown
+  const { data: projects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: api.projects.list,
     enabled: open,
   })
 
-  // Managers need employee list for assignment
-  const { data: employees = [] } = useQuery({
+  const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: api.employees.list,
     enabled: open && isManager,
@@ -51,6 +50,7 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
   const [status, setStatus] = useState<TimesheetStatus>('DRAFT')
   const [saving, setSaving] = useState(false)
 
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       if (editing) {
@@ -71,6 +71,22 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
     }
   }, [open, editing, presetProjectId, presetDate, user.employeeId])
 
+  // Auto-select first project when list loads (if none selected and not editing)
+  useEffect(() => {
+    if (open && !editing && !projectId && projects.length > 0) {
+      setProjectId(projects[0].id)
+    }
+  }, [open, editing, projectId, projects])
+
+  // Auto-select employee (for managers: first employee; for employees: themselves)
+  useEffect(() => {
+    if (open && isManager && !editing && !employeeId && employees.length > 0) {
+      // Try to select current user's employee record first
+      const me = employees.find(e => e.id === user.employeeId)
+      setEmployeeId(me ? me.id : employees[0].id)
+    }
+  }, [open, isManager, editing, employeeId, employees, user.employeeId])
+
   const save = async () => {
     const hrs = Number(hours)
     if (!hrs || hrs <= 0 || hrs > 24) {
@@ -78,11 +94,11 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
       return
     }
     if (!projectId) {
-      toast.error('Zgjidh projektit')
+      toast.error('Zgjidh projektin fillimisht')
       return
     }
     if (isManager && !employeeId) {
-      toast.error('Zgjidh punetorin')
+      toast.error('Zgjidh punëtorin fillimisht')
       return
     }
     setSaving(true)
@@ -105,7 +121,7 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
           description,
           status,
         })
-        toast.success('Orët u regjistruan')
+        toast.success('Orët u regjistruan me sukses')
       }
       qc.invalidateQueries({ queryKey: ['timesheets'] })
       qc.invalidateQueries({ queryKey: ['reports'] })
@@ -135,6 +151,8 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
     }
   }
 
+  const noProjects = !projectsLoading && projects.length === 0
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -150,35 +168,66 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
         <div className="space-y-4 py-2">
           {isManager && (
             <div className="space-y-2">
-              <Label>Punetori</Label>
-              <Select value={employeeId} onValueChange={setEmployeeId}>
-                <SelectTrigger><SelectValue placeholder="Zgjidh punetorin" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map(e => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.fullName} {e.position ? `· ${e.position}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Punëtori {!editing && <span className="text-destructive">*</span>}</Label>
+              {employeesLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : employees.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-3 rounded-md bg-muted/50 border border-dashed">
+                  Asnjë punëtor në këtë tenant. Shto punëtorë nga seksioni "Punëtorët".
+                </div>
+              ) : (
+                <Select value={employeeId} onValueChange={setEmployeeId}>
+                  <SelectTrigger><SelectValue placeholder="Zgjidh punëtorin" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.fullName}{e.position ? ` · ${e.position}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
 
           <div className="space-y-2">
-            <Label>Projekti</Label>
-            <Select value={projectId} onValueChange={setProjectId}>
-              <SelectTrigger><SelectValue placeholder="Zgjidh projektin" /></SelectTrigger>
-              <SelectContent>
-                {projects.map(p => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <span className="flex items-center gap-2">
-                      <span className="size-2 rounded-full" style={{ background: p.color }} />
-                      {p.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="flex items-center justify-between">
+              <span>Projekti {!editing && <span className="text-destructive">*</span>}</span>
+              {projects.length > 0 && (
+                <span className="text-xs text-muted-foreground font-normal">
+                  {projects.length} {projects.length === 1 ? 'projekt' : 'projekte'} të gatshme
+                </span>
+              )}
+            </Label>
+            {projectsLoading ? (
+              <Skeleton className="h-10 w-full" />
+            ) : noProjects ? (
+              <div className="text-sm text-muted-foreground p-4 rounded-md bg-muted/50 border border-dashed text-center">
+                <FolderKanban className="size-6 mx-auto mb-1.5 opacity-50" />
+                Asnjë projekt në këtë tenant.
+                {isManager && (
+                  <div className="mt-1 text-xs">
+                    Krijo një projekt nga seksioni "Projektet".
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Select value={projectId} onValueChange={setProjectId}>
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Zgjidh projektin..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2 w-full">
+                        <span className="size-2 rounded-full shrink-0" style={{ background: p.color }} />
+                        <span className="truncate">{p.name}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -225,8 +274,13 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Anulo
           </Button>
-          <Button onClick={save} disabled={saving}>
-            {saving ? 'Duke ruajtur...' : 'Ruaj'}
+          <Button onClick={save} disabled={saving || noProjects}>
+            {saving ? (
+              <>
+                <Loader2 className="size-4 mr-1.5 animate-spin" />
+                Duke ruajtur...
+              </>
+            ) : 'Ruaj'}
           </Button>
         </DialogFooter>
       </DialogContent>
