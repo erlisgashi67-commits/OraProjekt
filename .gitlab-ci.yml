@@ -93,7 +93,7 @@ deploy-staging:
   script:
     - echo "Deploying to staging..."
     - echo "This is a manual deploy job. Configure SSH keys in CI/CD variables."
-    - echo "Target: ${DEPLOY_HOST}:${DEPLOY_PATH}/staging/"
+    - echo "Target staging server configured in CI/CD variables"
   environment:
     name: staging
     url: https://staging.oraprojekt.com
@@ -118,7 +118,7 @@ deploy-production:
   script:
     - echo "Deploying to production..."
     - echo "This is a manual deploy job. Configure SSH keys in CI/CD variables."
-    - echo "Target: ${DEPLOY_HOST}:${DEPLOY_PATH}/production/"
+    - echo "Target production server configured in CI/CD variables"
   environment:
     name: production
     url: https://oraprojekt.com
