@@ -92,8 +92,8 @@ jobs:
       - name: 🚀 Deploy to Preview
         id: deploy
         run: |
-          DEPLOY_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -o 'https://[^ ]*')
-          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+          DEPLOY_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -o 'https://[^ ]*' | head -1)
+          echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
           echo "✅ Deployed to: $DEPLOY_URL"
 
       - name: 💬 Comment on PR
@@ -150,8 +150,8 @@ jobs:
       - name: 🚀 Deploy to Production
         id: deploy
         run: |
-          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -o 'https://[^ ]*')
-          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -o 'https://[^ ]*' | head -1)
+          echo "url=$DEPLOY_URL" >> "$GITHUB_OUTPUT"
           echo "✅ Deployed to production: $DEPLOY_URL"
 
       - name: 📢 Notify deployment
