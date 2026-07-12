@@ -113,10 +113,10 @@ jobs:
 
       - name: 🗄️ Setup Database
         env:
-          DATABASE_URL: 'file:./db/test.db'
+          DATABASE_URL: 'postgresql://postgres.liniwgyxkenrmmsvqkek:OraProjekt2026Secure@aws-0-eu-central-1.pooler.supabase.com:5432/postgres'
         run: |
           bun run db:generate
-          bun run db:push
+          bun run db:push --accept-data-loss
 
       - name: 🔍 Type check
         run: bun run tsc --noEmit || true
@@ -175,7 +175,7 @@ jobs:
 
       - name: 🏗️ Build Next.js
         env:
-          DATABASE_URL: 'file:./db/build.db'
+          DATABASE_URL: 'postgresql://postgres.liniwgyxkenrmmsvqkek:OraProjekt2026Secure@aws-0-eu-central-1.pooler.supabase.com:5432/postgres'
           AUTH_SECRET: 'build-secret-for-ci'
           NEXT_TELEMETRY_DISABLED: '1'
         run: bun run build
