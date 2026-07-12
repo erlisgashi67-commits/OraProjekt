@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,10 +29,13 @@ export const metadata: Metadata = {
     "Kosovë",
   ],
   authors: [{ name: "OraProjekt" }],
+  applicationName: "OraProjekt",
   icons: {
     icon: [
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     shortcut: "/favicon.ico",
     apple: [
@@ -41,8 +45,16 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "OraProjekt",
+    startupImage: [
+      { url: "/apple-touch-icon.png", media: "(device-width: 320px)" },
+    ],
+  },
+  formatDetection: {
+    telephone: false,
+    address: false,
+    email: true,
   },
   openGraph: {
     title: "OraProjekt",
@@ -60,7 +72,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#10b981" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
   width: "device-width",
   initialScale: 1,
   // Allow zoom for accessibility (WCAG 1.4.4)
@@ -88,6 +103,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <SonnerToaster />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

@@ -1,12 +1,18 @@
 {
-  "name": "OraProjekt",
+  "name": "OraProjekt — Menaxhim Orësh & Projektesh",
   "short_name": "OraProjekt",
-  "description": "Menaxhim i Orëve të Punëtorëve nëpër Projekte",
+  "description": "Sistem multi-tenant për menaxhimin e orëve të punëtorëve nëpër projekte.",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "background_color": "#ffffff",
   "theme_color": "#10b981",
   "orientation": "portrait-primary",
+  "dir": "ltr",
+  "lang": "sq",
+  "scope": "/",
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192.png",
@@ -31,6 +37,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Regjistro Orë",
+      "short_name": "Orë",
+      "description": "Shto orë pune të reja",
+      "url": "/?action=log",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Orët e Mia",
+      "short_name": "Mia",
+      "description": "Shiko orët e tua të punës",
+      "url": "/?view=my-hours",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
