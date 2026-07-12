@@ -1,0 +1,96 @@
+// OraProjekt — multi-tenant timesheet management
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String     @id @default(cuid())
+  name      String
+  subdomain String     @unique
+  plan      String     @default("FREE") // FREE | PRO | ENTERPRISE
+  createdAt DateTime   @default(now())
+  users     User[]
+  projects  Project[]
+  employees Employee[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String // plain-text for demo only
+  name      String
+  role      String   @default("EMPLOYEE") // MANAGER | EMPLOYEE
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  employee  Employee?
+  createdAt DateTime @default(now())
+}
+
+model Employee {
+  id          String              @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String
+  phone       String?
+  position    String?
+  hourlyRate  Float               @default(0)
+  tenantId    String
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  userId      String?             @unique
+  user        User?               @relation(fields: [userId], references: [id])
+  assignments ProjectAssignment[]
+  timesheets  Timesheet[]
+  createdAt   DateTime            @default(now())
+}
+
+model Project {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  status      String              @default("ACTIVE") // ACTIVE | ON_HOLD | COMPLETED
+  budgetHours Float?
+  startDate   DateTime?
+  endDate     DateTime?
+  color       String              @default("#10b981")
+  tenantId    String
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  assignments ProjectAssignment[]
+  timesheets  Timesheet[]
+  createdAt   DateTime            @default(now())
+}
+
+model ProjectAssignment {
+  id         String   @id @default(cuid())
+  projectId  String
+  employeeId String
+  role       String? // e.g. Developer, Designer, QA
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, employeeId])
+}
+
+model Timesheet {
+  id          String   @id @default(cuid())
+  employeeId  String
+  projectId   String
+  date        DateTime
+  hours       Float
+  description String?
+  status      String   @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | REJECTED
+  tenantId    String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, date])
+  @@index([employeeId, date])
+  @@index([projectId, date])
+}
