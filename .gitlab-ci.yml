@@ -1,14 +1,14 @@
-# OraProjekt — GitLab CI/CD Pipeline (Minimal)
-# Full pipeline will be added after verifying basic setup works
+# OraProjekt — GitLab CI/CD Pipeline
+# Minimal test pipeline
 
 stages:
   - test
 
-lint:
+hello:
   stage: test
-  image: oven/bun:latest
   script:
-    - bun install
-    - bun run lint
+    - echo "OraProjekt CI/CD pipeline is working!"
+    - echo "Branch: $CI_COMMIT_BRANCH"
+    - echo "Commit: $CI_COMMIT_SHA"
   rules:
     - if: $CI_COMMIT_BRANCH
