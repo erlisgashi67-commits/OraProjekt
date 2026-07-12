@@ -17,7 +17,7 @@ const STATUS_BADGE: Record<ProjectStatus, string> = {
 }
 
 export function EmployeeMyProjects() {
-  const user = useApp(s => s.user)!
+  const user = useApp(s => s.user)
   const setLogDialog = useApp(s => s.setLogDialog)
 
   const { data: projects = [], isLoading } = useQuery({
@@ -25,8 +25,13 @@ export function EmployeeMyProjects() {
     queryFn: api.projects.list,
   })
 
-  // Filter to projects where the current employee is a team member
-  const myProjects = projects.filter(p => p.team.some(m => m.id === user.employeeId))
+  // Defensive: if user becomes null mid-render, render nothing
+  if (!user) return null
+
+  // If user has no employeeId (e.g. manager with no employee record), show empty state
+  const myProjects = user.employeeId
+    ? projects.filter(p => p.team.some(m => m.id === user.employeeId))
+    : []
 
   if (isLoading) {
     return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -49,7 +54,9 @@ export function EmployeeMyProjects() {
             <FolderOpen className="size-10 mx-auto text-muted-foreground/50" />
             <div className="mt-3 font-medium">Asnjë projekt</div>
             <div className="text-sm text-muted-foreground mt-1">
-              Menaxheri yt do të të caktojë në projekte.
+              {user.employeeId
+                ? 'Menaxheri yt do të të caktojë në projekte.'
+                : 'Llogaria jote nuk është e lidhur me një profil punëtori.'}
             </div>
           </CardContent>
         </Card>

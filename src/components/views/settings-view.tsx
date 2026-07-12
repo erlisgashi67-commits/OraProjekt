@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useApp } from '@/store/app'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,17 +13,28 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 export function SettingsView() {
-  const user = useApp(s => s.user)!
+  const user = useApp(s => s.user)
   const setUser = useApp(s => s.setUser)
   const { theme, setTheme } = useTheme()
   const qc = useQueryClient()
+  const [mounted, setMounted] = useState(false)
 
-  const initials = user.name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase()
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
+
+  // Defensive: if user becomes null mid-render, render nothing
+  if (!user) return null
+
+  const initials = (user.name || '').split(' ').map(n => n?.[0] ?? '').filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
 
   const logout = async () => {
     try {
       await api.auth.logout()
-    } catch {}
+    } catch (e) {
+      console.warn('Logout API call failed', e)
+    }
     clearToken()
     qc.clear()
     setUser(null)
@@ -101,7 +113,7 @@ export function SettingsView() {
               { id: 'system', label: 'Sistemi', icon: Monitor },
             ].map(t => {
               const Icon = t.icon
-              const active = theme === t.id
+              const active = mounted && theme === t.id
               return (
                 <button
                   key={t.id}

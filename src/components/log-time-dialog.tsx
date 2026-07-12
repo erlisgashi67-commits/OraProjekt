@@ -24,17 +24,26 @@ type Props = {
   presetDate?: string
 }
 
+// Statuses that employees are allowed to set
+const EMPLOYEE_STATUSES: TimesheetStatus[] = ['DRAFT', 'SUBMITTED']
+const MANAGER_STATUSES: TimesheetStatus[] = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']
+
 export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, presetDate }: Props) {
   const user = useApp(s => s.user)!
   const qc = useQueryClient()
   const isManager = user.role === 'MANAGER'
 
-  // Always load projects when dialog opens — needed for the project dropdown
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  // Always load projects when dialog opens
+  const { data: allProjects = [], isLoading: projectsLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: api.projects.list,
     enabled: open,
   })
+
+  // For employees: filter to only their assigned projects
+  const projects = isManager
+    ? allProjects
+    : allProjects.filter(p => p.team.some(m => m.id === user.employeeId))
 
   const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees'],
@@ -44,11 +53,12 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
 
   const [projectId, setProjectId] = useState<string>(presetProjectId || '')
   const [employeeId, setEmployeeId] = useState<string>('')
-  const [date, setDate] = useState(presetDate || new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => presetDate ?? new Date().toISOString().slice(0, 10))
   const [hours, setHours] = useState<string>('8')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState<TimesheetStatus>('DRAFT')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -63,7 +73,7 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
       } else {
         setProjectId(presetProjectId || '')
         setEmployeeId(user.employeeId || '')
-        setDate(presetDate || new Date().toISOString().slice(0, 10))
+        setDate(presetDate ?? new Date().toISOString().slice(0, 10))
         setHours('8')
         setDescription('')
         setStatus('DRAFT')
@@ -78,10 +88,9 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
     }
   }, [open, editing, projectId, projects])
 
-  // Auto-select employee (for managers: first employee; for employees: themselves)
+  // Auto-select employee for managers
   useEffect(() => {
     if (open && isManager && !editing && !employeeId && employees.length > 0) {
-      // Try to select current user's employee record first
       const me = employees.find(e => e.id === user.employeeId)
       setEmployeeId(me ? me.id : employees[0].id)
     }
@@ -89,8 +98,8 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
 
   const save = async () => {
     const hrs = Number(hours)
-    if (!hrs || hrs <= 0 || hrs > 24) {
-      toast.error('Orët duhet të jenë mes 0 dhe 24')
+    if (isNaN(hrs) || hrs < 0.25 || hrs > 24) {
+      toast.error('Orët duhet të jenë mes 0.25 dhe 24')
       return
     }
     if (!projectId) {
@@ -137,7 +146,8 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
 
   const del = async () => {
     if (!editing) return
-    setSaving(true)
+    if (!confirm('Fshi këtë regjistrim? Ky veprim nuk mund të kthehet.')) return
+    setDeleting(true)
     try {
       await api.timesheets.delete(editing.id)
       toast.success('Regjistrimi u fshi')
@@ -147,11 +157,13 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
     } catch (e: any) {
       toast.error(e.message || 'Gabim')
     } finally {
-      setSaving(false)
+      setDeleting(false)
     }
   }
 
   const noProjects = !projectsLoading && projects.length === 0
+  const allowedStatuses = isManager ? MANAGER_STATUSES : EMPLOYEE_STATUSES
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -168,16 +180,16 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
         <div className="space-y-4 py-2">
           {isManager && (
             <div className="space-y-2">
-              <Label>Punëtori {!editing && <span className="text-destructive">*</span>}</Label>
+              <Label htmlFor="emp-select">Punëtori {!editing && <span className="text-destructive">*</span>}</Label>
               {employeesLoading ? (
-                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-11 w-full" />
               ) : employees.length === 0 ? (
                 <div className="text-sm text-muted-foreground p-3 rounded-md bg-muted/50 border border-dashed">
                   Asnjë punëtor në këtë tenant. Shto punëtorë nga seksioni "Punëtorët".
                 </div>
               ) : (
                 <Select value={employeeId} onValueChange={setEmployeeId}>
-                  <SelectTrigger><SelectValue placeholder="Zgjidh punëtorin" /></SelectTrigger>
+                  <SelectTrigger id="emp-select" className="h-11"><SelectValue placeholder="Zgjidh punëtorin" /></SelectTrigger>
                   <SelectContent>
                     {employees.map(e => (
                       <SelectItem key={e.id} value={e.id}>
@@ -191,7 +203,7 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
           )}
 
           <div className="space-y-2">
-            <Label className="flex items-center justify-between">
+            <Label htmlFor="proj-select" className="flex items-center justify-between">
               <span>Projekti {!editing && <span className="text-destructive">*</span>}</span>
               {projects.length > 0 && (
                 <span className="text-xs text-muted-foreground font-normal">
@@ -200,20 +212,17 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
               )}
             </Label>
             {projectsLoading ? (
-              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-11 w-full" />
             ) : noProjects ? (
               <div className="text-sm text-muted-foreground p-4 rounded-md bg-muted/50 border border-dashed text-center">
                 <FolderKanban className="size-6 mx-auto mb-1.5 opacity-50" />
-                Asnjë projekt në këtë tenant.
-                {isManager && (
-                  <div className="mt-1 text-xs">
-                    Krijo një projekt nga seksioni "Projektet".
-                  </div>
-                )}
+                {isManager
+                  ? 'Asnjë projekt në këtë tenant. Krijo një projekt nga seksioni "Projektet".'
+                  : 'Nuk je caktuar në asnjë projekt. Kontakto menaxherin.'}
               </div>
             ) : (
               <Select value={projectId} onValueChange={setProjectId}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger id="proj-select" className="h-11">
                   <SelectValue placeholder="Zgjidh projektin..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -233,11 +242,25 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="date">Data</Label>
-              <Input id="date" type="date" value={date} onChange={e => setDate(e.target.value)} />
+              <Input
+                id="date"
+                type="date"
+                max={todayStr}
+                value={date}
+                onChange={e => setDate(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="hours">Orët</Label>
-              <Input id="hours" type="number" step="0.25" min="0.25" max="24" value={hours} onChange={e => setHours(e.target.value)} />
+              <Input
+                id="hours"
+                type="number"
+                step="0.25"
+                min="0.25"
+                max="24"
+                value={hours}
+                onChange={e => setHours(e.target.value)}
+              />
             </div>
           </div>
 
@@ -246,6 +269,7 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
             <Textarea
               id="desc"
               rows={3}
+              maxLength={1000}
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Çfarë u punua?"
@@ -253,28 +277,33 @@ export function LogTimeDialog({ open, onOpenChange, editing, presetProjectId, pr
           </div>
 
           <div className="space-y-2">
-            <Label>Statusi</Label>
+            <Label htmlFor="status-select">Statusi</Label>
             <Select value={status} onValueChange={(v) => setStatus(v as TimesheetStatus)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="status-select"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {(Object.keys(STATUS_LABELS) as TimesheetStatus[]).map(s => (
+                {allowedStatuses.map(s => (
                   <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {!isManager && (
+              <p className="text-xs text-muted-foreground">
+                Si punëtor, mund të ruash si skicë ose ta dërgosh për aprovim.
+              </p>
+            )}
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
           {editing && (
-            <Button variant="destructive" onClick={del} disabled={saving} className="mr-auto">
-              Fshi
+            <Button variant="destructive" onClick={del} disabled={saving || deleting} className="mr-auto">
+              {deleting ? 'Duke fshirë...' : 'Fshi'}
             </Button>
           )}
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
             Anulo
           </Button>
-          <Button onClick={save} disabled={saving || noProjects}>
+          <Button onClick={save} disabled={saving || deleting || noProjects}>
             {saving ? (
               <>
                 <Loader2 className="size-4 mr-1.5 animate-spin" />

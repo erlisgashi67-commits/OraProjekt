@@ -49,8 +49,9 @@ export const viewport: Viewport = {
   themeColor: "#10b981",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Allow zoom for accessibility (WCAG 1.4.4)
+  maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
 };
 

@@ -56,11 +56,22 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await requireManager()
-    const body = await req.json()
+
+    let body: any
+    try { body = await req.json() } catch {
+      return NextResponse.json({ error: 'JSON i pavlefshëm' }, { status: 400 })
+    }
+
     const { name, description, status, budgetHours, startDate, endDate, color } = body
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Emri i projektit kërkohet' }, { status: 400 })
+    }
+    if (name.trim().length > 200) {
+      return NextResponse.json({ error: 'Emri është shumë i gjatë (max 200 karaktere)' }, { status: 400 })
+    }
+    if (description && description.length > 5000) {
+      return NextResponse.json({ error: 'Përshkrimi është shumë i gjatë (max 5000 karaktere)' }, { status: 400 })
     }
 
     // Validate budgetHours
@@ -77,22 +88,28 @@ export async function POST(req: NextRequest) {
 
     // Validate status
     const validStatuses = ['ACTIVE', 'ON_HOLD', 'COMPLETED']
-    const finalStatus = validStatuses.includes(status) ? status : 'ACTIVE'
+    const finalStatus = typeof status === 'string' && validStatuses.includes(status) ? status : 'ACTIVE'
 
-    // Validate dates
+    // Validate dates — parse as local (append T00:00:00) to avoid UTC off-by-one
     let parsedStart: Date | null = null
     let parsedEnd: Date | null = null
     if (startDate) {
-      parsedStart = new Date(startDate)
+      parsedStart = new Date(startDate + 'T00:00:00')
       if (isNaN(parsedStart.getTime())) {
         return NextResponse.json({ error: 'Data e fillimit është e pavlefshme' }, { status: 400 })
       }
     }
     if (endDate) {
-      parsedEnd = new Date(endDate)
+      parsedEnd = new Date(endDate + 'T00:00:00')
       if (isNaN(parsedEnd.getTime())) {
         return NextResponse.json({ error: 'Data e mbarimit është e pavlefshme' }, { status: 400 })
       }
+    }
+    if (parsedStart && parsedEnd && parsedEnd < parsedStart) {
+      return NextResponse.json(
+        { error: 'Data e mbarimit duhet të jetë pas datës së fillimit' },
+        { status: 400 }
+      )
     }
 
     const project = await db.project.create({

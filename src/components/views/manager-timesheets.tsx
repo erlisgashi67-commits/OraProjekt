@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, fmtHours, fmtDate } from '@/lib/api'
+import { api, fmtHours, fmtDate, fmtMoney } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,8 +48,8 @@ export function ManagerTimesheets() {
 
   const filtered = search
     ? timesheets.filter(t =>
-        t.employee.name.toLowerCase().includes(search.toLowerCase()) ||
-        t.project.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.employee?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (t.project?.name || '').toLowerCase().includes(search.toLowerCase()) ||
         (t.description || '').toLowerCase().includes(search.toLowerCase())
       )
     : timesheets
@@ -119,7 +119,7 @@ export function ManagerTimesheets() {
       </Card>
 
       {/* Summary bar */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3">
             <div className="text-[10px] text-muted-foreground uppercase">Regjistrime</div>
@@ -130,6 +130,12 @@ export function ManagerTimesheets() {
           <CardContent className="p-3">
             <div className="text-[10px] text-muted-foreground uppercase">Total orë</div>
             <div className="text-xl font-bold tabular-nums">{fmtHours(totalHours)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="text-[10px] text-muted-foreground uppercase">Kosto totale</div>
+            <div className="text-xl font-bold tabular-nums">{fmtMoney(totalCost)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -168,7 +174,7 @@ export function ManagerTimesheets() {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="font-semibold tabular-nums text-sm">{fmtHours(t.hours)}</div>
-                        <div className="text-[10px] text-muted-foreground">{t.employee.hourlyRate.toFixed(0)} €/h</div>
+                        <div className="text-[10px] text-muted-foreground">{(t.employee?.hourlyRate ?? 0).toFixed(0)} €/h</div>
                       </div>
                     </div>
                     {t.description && (

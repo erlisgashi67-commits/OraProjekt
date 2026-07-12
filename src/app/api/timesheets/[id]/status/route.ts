@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireManager } from '@/lib/auth'
 
+const VALID_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED']
+
 // PATCH /api/timesheets/[id]/status — change status (manager only)
 // body: { status: 'APPROVED' | 'REJECTED' | 'SUBMITTED' | 'DRAFT' }
 export async function PATCH(
@@ -11,9 +13,14 @@ export async function PATCH(
   try {
     const session = await requireManager()
     const { id } = await params
-    const { status } = await req.json()
 
-    if (!['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'].includes(status)) {
+    let body: any
+    try { body = await req.json() } catch {
+      return NextResponse.json({ error: 'JSON i pavlefshëm' }, { status: 400 })
+    }
+
+    const { status } = body
+    if (typeof status !== 'string' || !VALID_STATUSES.includes(status)) {
       return NextResponse.json({ error: 'Status i pavlefshëm' }, { status: 400 })
     }
 

@@ -36,7 +36,7 @@ const EMPLOYEE_NAV: { id: View; label: string; icon: any }[] = [
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const user = useApp(s => s.user)!
+  const user = useApp(s => s.user)
   const view = useApp(s => s.view)
   const setView = useApp(s => s.setView)
   const sidebarOpen = useApp(s => s.sidebarOpen)
@@ -53,24 +53,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setMounted(true)
   }, [])
 
+  // Defensive: if user becomes null (e.g. during logout), render nothing.
+  // The parent Boot component will switch to LoginScreen.
+  if (!user) return null
+
   const nav = user.role === 'MANAGER' ? MANAGER_NAV : EMPLOYEE_NAV
 
   const logout = async () => {
     try {
       await api.auth.logout()
-    } catch {}
+    } catch (e) {
+      console.warn('Logout API call failed', e)
+    }
     clearToken()
     qc.clear()
     setUser(null)
     toast.success('Dole nga llogaria')
   }
 
-  const initials = user.name
+  // Safe initials computation — handles empty names gracefully
+  const initials = (user.name || '')
     .split(' ')
-    .map(n => n[0])
+    .map(n => n?.[0] ?? '')
+    .filter(Boolean)
     .slice(0, 2)
     .join('')
-    .toUpperCase()
+    .toUpperCase() || '?'
 
   const SidebarContent = (
     <div className="flex flex-col h-full">
@@ -170,6 +178,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             size="icon"
             className="size-10"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Hap menunë"
           >
             <Menu className="size-5" />
           </Button>
@@ -184,6 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             size="icon"
             className="size-10"
             onClick={() => setLogDialog(true)}
+            aria-label="Regjistro orë"
           >
             <Plus className="size-5" />
           </Button>
@@ -222,6 +232,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="size-9"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 title="Ndrysho temën"
+                aria-label="Ndrysho temën"
               >
                 {mounted && theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>

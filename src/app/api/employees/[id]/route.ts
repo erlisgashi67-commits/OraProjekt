@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireManager } from '@/lib/auth'
 
+const FULL_INCLUDES = {
+  user: { select: { role: true } },
+  assignments: { include: { project: { select: { id: true, name: true, color: true } } } },
+  _count: { select: { timesheets: true } },
+} as const
+
+async function shapeEmployee(e: any) {
+  const aggregated = await db.timesheet.aggregate({
+    where: { employeeId: e.id },
+    _sum: { hours: true },
+  })
+  return {
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    fullName: `${e.firstName} ${e.lastName}`,
+    email: e.email,
+    phone: e.phone,
+    position: e.position,
+    hourlyRate: e.hourlyRate,
+    role: e.user?.role ?? 'EMPLOYEE',
+    createdAt: e.createdAt,
+    assignmentsCount: (e.assignments ?? []).length,
+    timesheetsCount: e._count?.timesheets ?? 0,
+    totalHours: aggregated._sum.hours ?? 0,
+    projects: (e.assignments ?? []).map((a: any) => ({
+      id: a.project.id,
+      name: a.project.name,
+      color: a.project.color,
+      role: a.role,
+    })),
+  }
+}
+
 // PUT /api/employees/[id] — update employee (manager only)
 export async function PUT(
   req: NextRequest,
@@ -10,7 +44,11 @@ export async function PUT(
   try {
     const session = await requireManager()
     const { id } = await params
-    const body = await req.json()
+
+    let body: any
+    try { body = await req.json() } catch {
+      return NextResponse.json({ error: 'JSON i pavlefshëm' }, { status: 400 })
+    }
 
     const existing = await db.employee.findFirst({
       where: { id, tenantId: session.tenantId },
@@ -31,9 +69,25 @@ export async function PUT(
       }
     }
 
-    // If email is changing, check for duplicates and update the User email too
+    // Validate role
+    if (body.role !== undefined && !['MANAGER', 'EMPLOYEE'].includes(body.role)) {
+      return NextResponse.json({ error: 'Rol i pavlefshëm' }, { status: 400 })
+    }
+
+    // Validate firstName/lastName if provided
+    if (body.firstName !== undefined && !body.firstName.trim()) {
+      return NextResponse.json({ error: 'Emri nuk mund të jetë bosh' }, { status: 400 })
+    }
+    if (body.lastName !== undefined && !body.lastName.trim()) {
+      return NextResponse.json({ error: 'Mbiemri nuk mund të jetë bosh' }, { status: 400 })
+    }
+
+    // If email is changing, validate format and check for duplicates
     const newEmail = body.email?.toLowerCase().trim()
     if (newEmail && newEmail !== existing.email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        return NextResponse.json({ error: 'Email i pavlefshëm' }, { status: 400 })
+      }
       const emailTaken = await db.user.findUnique({ where: { email: newEmail } })
       if (emailTaken) {
         return NextResponse.json(
@@ -53,21 +107,27 @@ export async function PUT(
         position: body.position !== undefined ? (body.position?.trim() || null) : existing.position,
         hourlyRate: parsedRate !== undefined ? parsedRate : existing.hourlyRate,
       },
+      include: FULL_INCLUDES,
     })
 
-    // Update linked user: email + role
+    // Update linked user: email + role + name (in a transaction-like manner)
     if (existing.userId) {
-      await db.user.update({
-        where: { id: existing.userId },
-        data: {
-          ...(newEmail ? { email: newEmail } : {}),
-          ...(body.role ? { role: body.role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE' } : {}),
-          name: `${updated.firstName} ${updated.lastName}`,
-        },
-      }).catch(() => {}) // non-fatal if user update fails
+      try {
+        await db.user.update({
+          where: { id: existing.userId },
+          data: {
+            ...(newEmail ? { email: newEmail } : {}),
+            ...(body.role ? { role: body.role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE' } : {}),
+            name: `${updated.firstName} ${updated.lastName}`,
+          },
+        })
+      } catch (err) {
+        // Non-fatal — log but don't fail the employee update
+        console.warn('Failed to update linked user for employee', id, err)
+      }
     }
 
-    return NextResponse.json({ employee: updated })
+    return NextResponse.json({ employee: await shapeEmployee(updated) })
   } catch (e: any) {
     if (e instanceof Response) return e as any
     if (e?.code === 'P2002') {
@@ -98,15 +158,17 @@ export async function DELETE(
       return NextResponse.json({ error: 'Punetori nuk u gjet' }, { status: 404 })
     }
 
-    // Use a transaction: delete employee first, then linked user
+    // Use a transaction: delete employee's timesheets/assignments, then employee, then user
     await db.$transaction(async (tx) => {
-      // Delete employee's timesheets and assignments first (cascade)
       await tx.timesheet.deleteMany({ where: { employeeId: id } })
       await tx.projectAssignment.deleteMany({ where: { employeeId: id } })
       await tx.employee.delete({ where: { id } })
-      // Delete linked user
       if (existing.userId) {
-        await tx.user.delete({ where: { id: existing.userId } }).catch(() => {})
+        try {
+          await tx.user.delete({ where: { id: existing.userId } })
+        } catch {
+          // Non-fatal — user may already be gone
+        }
       }
     })
 

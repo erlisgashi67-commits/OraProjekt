@@ -18,7 +18,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import {
-  Plus, Search, MoreVertical, Pencil, Trash2, UserPlus, UserX, FolderKanban,
+  Plus, Search, MoreVertical, Pencil, Trash2, FolderKanban,
 } from 'lucide-react'
 import { PROJECT_STATUS_LABELS, PROJECT_COLORS, type Project, type ProjectStatus } from '@/lib/types'
 import { useApp } from '@/store/app'
@@ -179,7 +179,7 @@ export function ManagerProjects() {
                         title={`${m.name}${m.role ? ` · ${m.role}` : ''}`}
                         className="size-7 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center border-2 border-background"
                       >
-                        {m.name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase()}
+                        {(m.name || '').split(' ').map(n => n?.[0] ?? '').filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'}
                       </div>
                     ))}
                     {p.team.length > 4 && (
@@ -246,6 +246,11 @@ function ProjectFormDialog({
   const save = async () => {
     if (!name.trim()) {
       toast.error('Emri kërkohet')
+      return
+    }
+    // Client-side date validation
+    if (startDate && endDate && endDate < startDate) {
+      toast.error('Data e mbarimit duhet të jetë pas datës së fillimit')
       return
     }
     setSaving(true)

@@ -24,7 +24,7 @@ const STATUS_COLORS: Record<TimesheetStatus, string> = {
 }
 
 export function EmployeeMyHours() {
-  const user = useApp(s => s.user)!
+  const user = useApp(s => s.user)
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<TimesheetStatus | 'ALL'>('ALL')
@@ -43,14 +43,12 @@ export function EmployeeMyHours() {
     }),
   })
 
-  const { data: report } = useQuery({
-    queryKey: ['reports', 'me'],
-    queryFn: () => api.reports.summary(),
-  })
+  // Defensive: if user becomes null mid-render, render nothing
+  if (!user) return null
 
   const filtered = search
     ? timesheets.filter(t =>
-        t.project.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.project?.name || '').toLowerCase().includes(search.toLowerCase()) ||
         (t.description || '').toLowerCase().includes(search.toLowerCase())
       )
     : timesheets
@@ -83,7 +81,7 @@ export function EmployeeMyHours() {
     <div className="space-y-4">
       {/* Greeting */}
       <div>
-        <h2 className="text-xl font-bold">Përshëndetje, {user.name.split(' ')[0]} 👋</h2>
+        <h2 className="text-xl font-bold">Përshëndetje, {(user.name || '').split(' ')[0] || '👤'} 👋</h2>
         <p className="text-sm text-muted-foreground">Këtu janë orët e tua të punës.</p>
       </div>
 

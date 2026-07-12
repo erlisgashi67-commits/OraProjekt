@@ -2,17 +2,18 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, fmtHours, fmtNumber, fmtMoney, fmtDate, fmtDateShort } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { api, fmtHours, fmtNumber, fmtMoney, fmtDateShort } from '@/lib/api'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell,
 } from 'recharts'
-import { Download, CalendarRange, BarChart3, PieChart as PieIcon, Users, FolderKanban } from 'lucide-react'
+import { Download, BarChart3, PieChart as PieIcon, Users, FolderKanban } from 'lucide-react'
+import { STATUS_LABELS } from '@/lib/types'
+import { toast } from 'sonner'
 
 const RANGES = [
   { id: '30', label: '30 ditë', days: 30 },
@@ -45,22 +46,44 @@ export function ManagerReports() {
   const projectPieData = report.byProject.map(p => ({ name: p.name, value: p.hours, color: p.color }))
   const totalHoursAll = projectPieData.reduce((sum, d) => sum + d.value, 0)
 
-  const exportCsv = () => {
-    const rows = [
-      ['Data', 'Punetori', 'Projekti', 'Orë', 'Tarifa/h', 'Kosto', 'Statusi', 'Përshkrimi'],
-    ]
-    // we can include byEmployee aggregated data for simplicity
-    for (const e of report.byEmployee) {
-      rows.push(['—', e.name, '—', String(e.hours), String(e.hourlyRate), String(e.cost), '—', `${e.entries} regjistrime`])
+  const exportCsv = async () => {
+    // Fetch detailed timesheets for the same range so CSV contains real per-entry data
+    try {
+      const timesheets = await api.timesheets.list({
+        from: fromStr,
+        to: new Date().toISOString().slice(0, 10),
+        limit: 1000,
+      })
+      const escape = (s: any) => `"${String(s ?? '').replace(/"/g, '""')}"`
+      const rows: string[][] = [
+        ['Data', 'Punetori', 'Pozita', 'Projekti', 'Orë', 'Tarifa/h (€)', 'Kosto (€)', 'Statusi', 'Përshkrimi'],
+      ]
+      for (const t of timesheets) {
+        rows.push([
+          t.date.slice(0, 10),
+          t.employee.name,
+          t.employee.position ?? '',
+          t.project.name,
+          String(t.hours),
+          String(t.employee.hourlyRate),
+          String(t.cost),
+          STATUS_LABELS[t.status],
+          t.description ?? '',
+        ])
+      }
+      const csv = rows.map(r => r.map(escape).join(',')).join('\n')
+      // Prepend BOM so Excel detects UTF-8 (Albanian diacritics)
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `oraprojekt-raport-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success(`U eksportuan ${timesheets.length} regjistrime`)
+    } catch (e: any) {
+      toast.error(e.message || 'Eksporti dështoi')
     }
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `oraprojekt-raport-${new Date().toISOString().slice(0,10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   return (
@@ -197,7 +220,7 @@ export function ManagerReports() {
                           cx="50%"
                           cy="50%"
                           outerRadius={90}
-                          label={(d: any) => `${((d.value / totalHoursAll) * 100).toFixed(0)}%`}
+                          label={(d: any) => totalHoursAll > 0 ? `${((d.value / totalHoursAll) * 100).toFixed(0)}%` : '0%'}
                           labelLine={false}
                         >
                           {projectPieData.map((d, i) => (

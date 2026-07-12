@@ -28,7 +28,18 @@ type AppState = {
 
 export const useApp = create<AppState>((set) => ({
   user: null,
-  setUser: (u) => set({ user: u }),
+  // When user is set, also reset the view based on role to avoid stale view state
+  setUser: (u) =>
+    set((state) => {
+      // If user changed (different id) or role changed, reset view to a sensible default
+      const userChanged = !state.user || (u && state.user && u.id !== state.user.id)
+      const roleChanged = u && state.user && u.role !== state.user.role
+      if (userChanged || roleChanged) {
+        const defaultView: View = u?.role === 'MANAGER' ? 'dashboard' : 'my-hours'
+        return { user: u, view: defaultView, sidebarOpen: false }
+      }
+      return { user: u }
+    }),
   view: 'dashboard',
   setView: (v) => set({ view: v, sidebarOpen: false }),
   sidebarOpen: false,
@@ -36,6 +47,7 @@ export const useApp = create<AppState>((set) => ({
   logDialogOpen: false,
   setLogDialogOpen: (open) => set({ logDialogOpen: open }),
   logDialogProjectId: undefined,
+  // Clear projectId when closing so next open doesn't reuse a stale value
   setLogDialog: (open, projectId) =>
-    set({ logDialogOpen: open, logDialogProjectId: projectId }),
+    set({ logDialogOpen: open, logDialogProjectId: open ? projectId : undefined }),
 }))

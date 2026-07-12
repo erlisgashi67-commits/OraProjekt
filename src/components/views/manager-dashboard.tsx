@@ -309,7 +309,7 @@ export function ManagerDashboard() {
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm font-semibold tabular-nums">{fmtNumber(t.hours)}h</div>
-                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 mt-0.5" style={{ color: STATUS_COLORS[t.status], borderColor: STATUS_COLORS[t.status] }}>
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 mt-0.5" style={{ color: STATUS_COLORS[t.status] ?? '#94a3b8', borderColor: STATUS_COLORS[t.status] ?? '#94a3b8' }}>
                       {STATUS_LABELS[t.status]}
                     </Badge>
                   </div>

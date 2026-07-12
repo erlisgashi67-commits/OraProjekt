@@ -61,7 +61,7 @@ export function LoginScreen() {
 
         <div className="relative z-10 mt-8 lg:mt-0 space-y-5 max-w-xl">
           <h1 className="text-3xl lg:text-5xl font-bold leading-tight">
-            Regjistro orët,<br />menaxho projektet,<br /><ul className="text-emerald-200">shiko raportet.</ul>
+            Regjistro orët,<br />menaxho projektet,<br /><span className="text-emerald-200">shiko raportet.</span>
           </h1>
           <p className="text-white/85 text-base lg:text-lg leading-relaxed">
             Platformë multi-tenant për ekipet që punojnë në disa projekte njëkohësisht.

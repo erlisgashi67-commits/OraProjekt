@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
     const to = url.searchParams.get('to')
 
     const dateFilter: any = {}
-    if (from) dateFilter.gte = new Date(from)
-    if (to) dateFilter.lte = new Date(to)
+    if (from) dateFilter.gte = new Date(from + 'T00:00:00')
+    if (to) dateFilter.lte = new Date(to + 'T23:59:59') // include entire `to` day
 
     const where: any = { tenantId: session.tenantId }
     if (Object.keys(dateFilter).length > 0) where.date = dateFilter

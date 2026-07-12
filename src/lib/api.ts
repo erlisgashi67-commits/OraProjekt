@@ -45,9 +45,11 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
     headers,
   })
 
-  // Handle 401 — only trigger auto-logout if we had a token
+  // Handle 401 — only trigger auto-logout if we had a token AND the request wasn't to /api/auth itself
+  // (avoids false "session expired" toast on first visit with a stale token)
   if (res.status === 401) {
-    if (token && typeof window !== 'undefined') {
+    const isAuthEndpoint = url.startsWith('/api/auth')
+    if (token && !isAuthEndpoint && typeof window !== 'undefined') {
       clearToken()
       window.dispatchEvent(new CustomEvent('op:unauthorized'))
     }
@@ -204,12 +206,19 @@ export function fmtMoney(n: number): string {
 }
 
 export function fmtDate(iso: string): string {
-  const d = new Date(iso)
+  // Parse date-only strings as local time to avoid UTC off-by-one
+  const str = typeof iso === 'string' ? iso : String(iso)
+  const d = str.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(str)
+    ? new Date(str.slice(0, 10) + 'T00:00:00')
+    : new Date(str)
   return d.toLocaleDateString('sq-AL', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 export function fmtDateShort(iso: string): string {
-  const d = new Date(iso)
+  const str = typeof iso === 'string' ? iso : String(iso)
+  const d = str.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(str)
+    ? new Date(str.slice(0, 10) + 'T00:00:00')
+    : new Date(str)
   return d.toLocaleDateString('sq-AL', { day: '2-digit', month: '2-digit' })
 }
 

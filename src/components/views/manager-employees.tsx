@@ -16,7 +16,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreVertical, Pencil, Trash2, Users, Mail, Phone, Briefcase } from 'lucide-react'
+import { Plus, Search, MoreVertical, Pencil, Trash2, Users, Mail, Phone } from 'lucide-react'
 import type { Employee } from '@/lib/types'
 import { toast } from 'sonner'
 
@@ -89,7 +89,7 @@ export function ManagerEmployees() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(e => {
-            const initials = e.fullName.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase()
+            const initials = (e.fullName || '').split(' ').map(n => n?.[0] ?? '').filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
             return (
               <Card key={e.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
@@ -290,8 +290,8 @@ function EmployeeFormDialog({
           </div>
           {!employee && (
             <div className="space-y-2">
-              <Label>Fjalëkalimi (fshivet: 123456)</Label>
-              <Input type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="123456" />
+              <Label htmlFor="emp-password">Fjalëkalimi (fshihet: 123456)</Label>
+              <Input id="emp-password" type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="123456" />
             </div>
           )}
         </div>
