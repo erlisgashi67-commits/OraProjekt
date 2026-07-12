@@ -56,7 +56,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Projekti nuk u gjet' }, { status: 404 })
     }
 
-    await db.project.delete({ where: { id } })
+    // Use a transaction: delete timesheets + assignments first, then project
+    await db.$transaction(async (tx) => {
+      await tx.timesheet.deleteMany({ where: { projectId: id } })
+      await tx.projectAssignment.deleteMany({ where: { projectId: id } })
+      await tx.project.delete({ where: { id } })
+    })
+
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     if (e instanceof Response) return e as any

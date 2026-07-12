@@ -65,39 +65,58 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = email.toLowerCase().trim()
-    const existing = await db.user.findUnique({ where: { email: normalizedEmail } })
-    if (existing) {
-      return NextResponse.json({ error: 'Email ekziston tashmë' }, { status: 409 })
+
+    // Validate hourlyRate is a valid number
+    const parsedRate = hourlyRate !== undefined && hourlyRate !== '' ? Number(hourlyRate) : 0
+    if (isNaN(parsedRate) || parsedRate < 0) {
+      return NextResponse.json({ error: 'Tarifa/orë duhet të jetë një numër pozitiv' }, { status: 400 })
     }
 
-    // Create user + employee in a transaction
-    const user = await db.user.create({
-      data: {
-        email: normalizedEmail,
-        password: password || '123456',
-        name: `${firstName} ${lastName}`,
-        role: role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE',
-        tenantId: session.tenantId,
-      },
-    })
+    // Check for existing email — check both User and Employee tables
+    const existingUser = await db.user.findUnique({ where: { email: normalizedEmail } })
+    if (existingUser) {
+      return NextResponse.json({ error: 'Email ekziston tashmë. Përdor email tjetër.' }, { status: 409 })
+    }
 
-    const employee = await db.employee.create({
-      data: {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: normalizedEmail,
-        phone: phone?.trim() || null,
-        position: position?.trim() || null,
-        hourlyRate: hourlyRate ? Number(hourlyRate) : 0,
-        tenantId: session.tenantId,
-        userId: user.id,
-      },
+    // Use a transaction so both User and Employee are created atomically.
+    // If either fails, both are rolled back — no orphaned records.
+    const employee = await db.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: normalizedEmail,
+          password: password?.trim() || '123456',
+          name: `${firstName.trim()} ${lastName.trim()}`,
+          role: role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE',
+          tenantId: session.tenantId,
+        },
+      })
+
+      return tx.employee.create({
+        data: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: normalizedEmail,
+          phone: phone?.trim() || null,
+          position: position?.trim() || null,
+          hourlyRate: parsedRate,
+          tenantId: session.tenantId,
+          userId: user.id,
+        },
+      })
     })
 
     return NextResponse.json({ employee }, { status: 201 })
   } catch (e: any) {
     if (e instanceof Response) return e as any
+    // Prisma unique constraint violation
+    if (e?.code === 'P2002') {
+      const target = e?.meta?.target?.join(', ') || 'fusha'
+      return NextResponse.json(
+        { error: `Vlera e dhënë për "${target}" ekziston tashmë.` },
+        { status: 409 }
+      )
+    }
     console.error('POST /api/employees error', e)
-    return NextResponse.json({ error: 'Gabim i brendshëm' }, { status: 500 })
+    return NextResponse.json({ error: 'Gabim i brendshëm i serverit' }, { status: 500 })
   }
 }

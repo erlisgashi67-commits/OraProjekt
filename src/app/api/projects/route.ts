@@ -63,14 +63,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Emri i projektit kërkohet' }, { status: 400 })
     }
 
+    // Validate budgetHours
+    let parsedBudget: number | null = null
+    if (budgetHours !== undefined && budgetHours !== '' && budgetHours !== null) {
+      parsedBudget = Number(budgetHours)
+      if (isNaN(parsedBudget) || parsedBudget < 0) {
+        return NextResponse.json(
+          { error: 'Buxheti i orëve duhet të jetë numër pozitiv' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Validate status
+    const validStatuses = ['ACTIVE', 'ON_HOLD', 'COMPLETED']
+    const finalStatus = validStatuses.includes(status) ? status : 'ACTIVE'
+
+    // Validate dates
+    let parsedStart: Date | null = null
+    let parsedEnd: Date | null = null
+    if (startDate) {
+      parsedStart = new Date(startDate)
+      if (isNaN(parsedStart.getTime())) {
+        return NextResponse.json({ error: 'Data e fillimit është e pavlefshme' }, { status: 400 })
+      }
+    }
+    if (endDate) {
+      parsedEnd = new Date(endDate)
+      if (isNaN(parsedEnd.getTime())) {
+        return NextResponse.json({ error: 'Data e mbarimit është e pavlefshme' }, { status: 400 })
+      }
+    }
+
     const project = await db.project.create({
       data: {
         name: name.trim(),
         description: description?.trim() || null,
-        status: status || 'ACTIVE',
-        budgetHours: budgetHours ? Number(budgetHours) : null,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        status: finalStatus,
+        budgetHours: parsedBudget,
+        startDate: parsedStart,
+        endDate: parsedEnd,
         color: color || '#10b981',
         tenantId: session.tenantId,
       },
@@ -79,7 +111,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ project }, { status: 201 })
   } catch (e: any) {
     if (e instanceof Response) return e as any
+    if (e?.code === 'P2002') {
+      const target = e?.meta?.target?.join(', ') || 'fusha'
+      return NextResponse.json(
+        { error: `Vlera e dhënë për "${target}" ekziston tashmë.` },
+        { status: 409 }
+      )
+    }
     console.error('POST /api/projects error', e)
-    return NextResponse.json({ error: 'Gabim i brendshëm' }, { status: 500 })
+    return NextResponse.json({ error: 'Gabim i brendshëm i serverit' }, { status: 500 })
   }
 }
